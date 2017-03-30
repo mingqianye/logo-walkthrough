@@ -19,31 +19,40 @@
   objs
 )
 
+(defmulti create-body :type)
 
-(defn create-box [x y w h options] 
-  {:w w :h h :body (.rectangle Bodies x y w h (clj->js options))}
+(defmethod create-body :box [{:keys [x y w h options] :as box }]
+  (assoc box :body (.rectangle Bodies x y w h (clj->js options)))
+)
+
+(defmethod create-body :circle [{:keys [x y radius options] :as circle }]
+  (assoc circle :body (.circle Bodies x y radius (clj->js options)))
 )
 
 ;;Quil Stuff
+(def the-world  [
+                 {:type :box :x 250 :y 450 :w 500 :h 100 :options {:isStatic true}}
+                 {:type :box :x 200 :y 0 :w 10 :h 10 :options {:restitution 0.8}}
+                 {:type :circle :x 200 :y 40 :radius 10 :options {:restitution 0.8}}
+                 {:type :circle :x 200 :y 80 :radius 10 :options {:restitution 0.9}}
+                 ]
+  )
 
 (defn setup []
   (q/frame-rate 60)
   ; Set color mode to HSB (HSV) instead of default RGB.
   (q/color-mode :hsb)
   (q/rect-mode :center)
-  (let [ground (create-box 250 450 500 100 {:isStatic true})
-        box (create-box 200 0 10 10 {:restitution 1})
-        engine (.create Engine)
-        bodies [ground box]
-        ]
+  (let [engine (.create js/Matter.Engine)
+        bodies (map create-body the-world)]
     (addToWorld! engine bodies)
     
     {:engine engine
      :bodies bodies
      :millis (q/millis)
      :deltaO -1
-     }
-    )
+     })
+    
 )
 
 (defn update-state [{:keys [engine bodies millis deltaO] :as state}]
@@ -58,16 +67,29 @@
      }
   ))
 
-(defn draw-box [{:keys [w h body]}]
-  (let [position (.-position body)
-        angle (.-angle body)
-        ]
+(defn quil-draw [position angle draw-fn]
   (q/push-matrix)
   (q/translate (.-x position) (.-y position))
   (q/rotate angle)
-  (q/rect 0 0 w h)
+  (draw-fn)
   (q/pop-matrix)
-  
+)
+
+(defmulti draw-body :type)
+
+(defmethod draw-body :box [{:keys [w h body]}]
+  (let [position (.-position body)
+        angle (.-angle body)
+        ]
+    (quil-draw position angle #(q/rect 0 0 w h))
+    )
+)
+
+(defmethod draw-body :circle [{:keys [radius body]}]
+  (let [position (.-position body)
+        diameter (* 2 radius)
+        ]
+    (quil-draw position 0 #(q/ellipse 0 0 diameter diameter))
     )
 )
 
@@ -77,8 +99,8 @@
                                         ; Set circle color.
   (q/fill 32 255 255)
 
-  (doseq [box bodies] 
-    (draw-box box)))
+  (doseq [body bodies] 
+    (draw-body body)))
 
 (q/defsketch logo
   :host "logo"
